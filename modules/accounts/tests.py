@@ -145,3 +145,58 @@ class AuthRoutingAliasTests(APITestCase):
 
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 		self.assertIn("email", response.data)
+
+
+class AuthSessionEndpointsTests(APITestCase):
+	def setUp(self):
+		self.user = NguoiDung.objects.create_user(
+			email="session-user@example.com",
+			password="Secret123!",
+			vai_tro="ung_vien",
+		)
+
+	def _login(self):
+		response = self.client.post(
+			"/api/auth/login/",
+			{
+				"email": "session-user@example.com",
+				"password": "Secret123!",
+			},
+			format="json",
+		)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		return response.data
+
+	def test_me_returns_current_user(self):
+		tokens = self._login()
+		self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+		response = self.client.get("/api/auth/me/", format="json")
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data["id"], self.user.id)
+		self.assertEqual(response.data["email"], "session-user@example.com")
+		self.assertEqual(response.data["vai_tro"], "ung_vien")
+		self.assertIn("is_active", response.data)
+
+	def test_me_requires_authentication(self):
+		response = self.client.get("/api/auth/me/", format="json")
+		self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+	def test_logout_blacklists_refresh_token(self):
+		tokens = self._login()
+		self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+		logout_response = self.client.post(
+			"/api/auth/logout/",
+			{"refresh": tokens["refresh"]},
+			format="json",
+		)
+		self.assertEqual(logout_response.status_code, status.HTTP_200_OK)
+
+		refresh_response = self.client.post(
+			"/api/auth/token/refresh/",
+			{"refresh": tokens["refresh"]},
+			format="json",
+		)
+		self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)

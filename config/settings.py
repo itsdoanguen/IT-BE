@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'modules.accounts.apps.AccountsConfig',
     'modules.profiles.apps.ProfilesConfig',
     'modules.jobs.apps.JobsConfig',

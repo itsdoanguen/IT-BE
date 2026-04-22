@@ -4,6 +4,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -43,6 +44,7 @@ class TokenRefreshRequestSerializer(serializers.Serializer):
 
 class TokenRefreshResponseSerializer(serializers.Serializer):
 	access = serializers.CharField()
+	token_type = serializers.CharField(required=False)
 
 
 class TestTokenRequestSerializer(serializers.Serializer):
@@ -67,6 +69,17 @@ class NguoiDungPatchRequestSerializer(serializers.Serializer):
 	email = serializers.EmailField(required=False)
 	password = serializers.CharField(write_only=True, required=False)
 	vai_tro = serializers.ChoiceField(choices=NguoiDung.VaiTro.choices, required=False)
+
+
+class MeResponseSerializer(serializers.Serializer):
+	id = serializers.IntegerField()
+	email = serializers.EmailField()
+	vai_tro = serializers.ChoiceField(choices=NguoiDung.VaiTro.choices)
+	is_active = serializers.BooleanField()
+
+
+class LogoutRequestSerializer(serializers.Serializer):
+	refresh = serializers.CharField()
 
 
 class TokenObtainPairWithTypeSerializer(TokenObtainPairSerializer):
@@ -176,7 +189,56 @@ class TokenRefreshSwaggerView(TokenRefreshView):
 		],
 	)
 	def post(self, request, *args, **kwargs):
-		return super().post(request, *args, **kwargs)
+		response = super().post(request, *args, **kwargs)
+		if response.status_code == status.HTTP_200_OK:
+			response.data["token_type"] = "Bearer"
+		return response
+
+
+class MeView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(
+		summary='Get current user',
+		description='Return basic profile information of the authenticated user.',
+		tags=['auth'],
+		responses={200: MeResponseSerializer, 401: OpenApiResponse(description='Missing or invalid token')},
+	)
+	def get(self, request):
+		user = request.user
+		return Response(
+			{
+				"id": user.id,
+				"email": user.email,
+				"vai_tro": user.vai_tro,
+				"is_active": user.is_active,
+			},
+			status=status.HTTP_200_OK,
+		)
+
+
+class LogoutView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(
+		summary='Logout user',
+		description='Invalidate refresh token by adding it to the blacklist.',
+		tags=['auth'],
+		request=LogoutRequestSerializer,
+		responses={200: OpenApiResponse(description='Logged out successfully'), 401: OpenApiResponse(description='Invalid token')},
+	)
+	def post(self, request):
+		serializer = LogoutRequestSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+
+		refresh_token = serializer.validated_data["refresh"]
+		try:
+			token = RefreshToken(refresh_token)
+			token.blacklist()
+		except TokenError:
+			return Response({"detail": "Invalid or expired refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
+
+		return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
 
 
 class TestTokenView(APIView):
