@@ -3,6 +3,7 @@ from rest_framework import serializers, status, viewsets
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -44,6 +45,7 @@ class TokenRefreshRequestSerializer(serializers.Serializer):
 
 class TokenRefreshResponseSerializer(serializers.Serializer):
 	access = serializers.CharField()
+	refresh = serializers.CharField(required=False)
 	token_type = serializers.CharField(required=False)
 
 
@@ -137,15 +139,23 @@ class TokenObtainPairWithTypeSerializer(TokenObtainPairSerializer):
 class NguoiDungViewSet(viewsets.ModelViewSet):
 	queryset = NguoiDung.objects.all().order_by("id")
 	serializer_class = NguoiDungSerializer
+	throttle_classes = [ScopedRateThrottle]
 
 	def get_permissions(self):
 		if self.action == "create":
 			return [AllowAny()]
 		return [IsAuthenticated()]
 
+	def get_throttles(self):
+		if self.action == "create":
+			self.throttle_scope = "auth_register"
+		return super().get_throttles()
+
 
 class TokenObtainPairSwaggerView(TokenObtainPairView):
 	serializer_class = TokenObtainPairWithTypeSerializer
+	throttle_classes = [ScopedRateThrottle]
+	throttle_scope = "auth_login"
 
 	@extend_schema(
 		summary='Obtain JWT pair',

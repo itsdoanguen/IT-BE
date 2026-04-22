@@ -136,6 +136,13 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': os.getenv('THROTTLE_AUTH_LOGIN', '10/minute'),
+        'auth_register': os.getenv('THROTTLE_AUTH_REGISTER', '5/minute'),
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -160,6 +167,8 @@ SPECTACULAR_SETTINGS = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 # Test token endpoint settings (for integration testing without login flow)

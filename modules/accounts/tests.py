@@ -1,4 +1,5 @@
 from django.test import override_settings
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -76,6 +77,9 @@ class TestTokenEndpointDisabledTests(APITestCase):
 
 
 class AuthRoutingAliasTests(APITestCase):
+	def setUp(self):
+		cache.clear()
+
 	def test_register_alias_creates_user(self):
 		response = self.client.post(
 			"/api/auth/register/",
@@ -149,6 +153,7 @@ class AuthRoutingAliasTests(APITestCase):
 
 class AuthSessionEndpointsTests(APITestCase):
 	def setUp(self):
+		cache.clear()
 		self.user = NguoiDung.objects.create_user(
 			email="session-user@example.com",
 			password="Secret123!",
@@ -200,3 +205,83 @@ class AuthSessionEndpointsTests(APITestCase):
 			format="json",
 		)
 		self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthHardeningTests(APITestCase):
+	def setUp(self):
+		cache.clear()
+		self.user = NguoiDung.objects.create_user(
+			email="hardening-user@example.com",
+			password="Secret123!",
+			vai_tro="ung_vien",
+		)
+
+	def test_refresh_rotates_and_blacklists_old_refresh(self):
+		login_response = self.client.post(
+			"/api/auth/login/",
+			{
+				"email": "hardening-user@example.com",
+				"password": "Secret123!",
+			},
+			format="json",
+		)
+		self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+		old_refresh = login_response.data["refresh"]
+		refresh_response = self.client.post(
+			"/api/auth/token/refresh/",
+			{"refresh": old_refresh},
+			format="json",
+		)
+		self.assertEqual(refresh_response.status_code, status.HTTP_200_OK)
+		self.assertIn("access", refresh_response.data)
+		self.assertIn("refresh", refresh_response.data)
+		self.assertEqual(refresh_response.data.get("token_type"), "Bearer")
+
+		second_refresh_response = self.client.post(
+			"/api/auth/token/refresh/",
+			{"refresh": old_refresh},
+			format="json",
+		)
+		self.assertEqual(second_refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthThrottlingTests(APITestCase):
+	def setUp(self):
+		cache.clear()
+		NguoiDung.objects.create_user(
+			email="throttle-user@example.com",
+			password="Secret123!",
+			vai_tro="ung_vien",
+		)
+
+	def test_login_is_throttled(self):
+		payload = {
+			"email": "throttle-user@example.com",
+			"password": "Secret123!",
+		}
+
+		responses = [self.client.post("/api/auth/login/", payload, format="json") for _ in range(11)]
+
+		for response in responses[:10]:
+			self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(responses[-1].status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+	def test_register_is_throttled(self):
+		responses = []
+		for index in range(6):
+			responses.append(
+				self.client.post(
+					"/api/auth/register/",
+					{
+						"email": f"throttle-register-{index}@example.com",
+						"password": "Secret123!",
+						"vai_tro": "ung_vien",
+					},
+					format="json",
+				)
+			)
+
+		for response in responses[:5]:
+			self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		self.assertEqual(responses[-1].status_code, status.HTTP_429_TOO_MANY_REQUESTS)
