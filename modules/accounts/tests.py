@@ -73,3 +73,39 @@ class TestTokenEndpointDisabledTests(APITestCase):
 	def test_returns_not_found_when_disabled(self):
 		response = self.client.post("/api/auth/test-token/", format="json")
 		self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AuthRoutingAliasTests(APITestCase):
+	def test_register_alias_creates_user(self):
+		response = self.client.post(
+			"/api/auth/register/",
+			{
+				"email": "alias-register@example.com",
+				"password": "Secret123!",
+				"vai_tro": "ung_vien",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		self.assertTrue(NguoiDung.objects.filter(email="alias-register@example.com").exists())
+
+	def test_login_alias_returns_jwt_pair(self):
+		NguoiDung.objects.create_user(
+			email="alias-login@example.com",
+			password="Secret123!",
+			vai_tro="ung_vien",
+		)
+
+		response = self.client.post(
+			"/api/auth/login/",
+			{
+				"email": "alias-login@example.com",
+				"password": "Secret123!",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertIn("access", response.data)
+		self.assertIn("refresh", response.data)
