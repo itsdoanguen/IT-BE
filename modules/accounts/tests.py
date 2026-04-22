@@ -109,3 +109,39 @@ class AuthRoutingAliasTests(APITestCase):
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertIn("access", response.data)
 		self.assertIn("refresh", response.data)
+		self.assertEqual(response.data.get("token_type"), "Bearer")
+
+	def test_register_alias_rejects_weak_password(self):
+		response = self.client.post(
+			"/api/auth/register/",
+			{
+				"email": "weak-password@example.com",
+				"password": "123",
+				"vai_tro": "ung_vien",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertIn("password", response.data)
+		self.assertFalse(NguoiDung.objects.filter(email="weak-password@example.com").exists())
+
+	def test_register_alias_rejects_duplicate_email(self):
+		NguoiDung.objects.create_user(
+			email="duplicate-register@example.com",
+			password="Secret123!",
+			vai_tro="ung_vien",
+		)
+
+		response = self.client.post(
+			"/api/auth/register/",
+			{
+				"email": "duplicate-register@example.com",
+				"password": "Secret123!",
+				"vai_tro": "ung_vien",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertIn("email", response.data)

@@ -4,6 +4,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_spectacular.utils import (
@@ -33,6 +34,7 @@ class NguoiDungCreateRequestSerializer(serializers.Serializer):
 class TokenPairResponseSerializer(serializers.Serializer):
 	access = serializers.CharField()
 	refresh = serializers.CharField()
+	token_type = serializers.CharField()
 
 
 class TokenRefreshRequestSerializer(serializers.Serializer):
@@ -65,6 +67,13 @@ class NguoiDungPatchRequestSerializer(serializers.Serializer):
 	email = serializers.EmailField(required=False)
 	password = serializers.CharField(write_only=True, required=False)
 	vai_tro = serializers.ChoiceField(choices=NguoiDung.VaiTro.choices, required=False)
+
+
+class TokenObtainPairWithTypeSerializer(TokenObtainPairSerializer):
+	def validate(self, attrs):
+		data = super().validate(attrs)
+		data["token_type"] = "Bearer"
+		return data
 
 
 @extend_schema_view(
@@ -123,6 +132,8 @@ class NguoiDungViewSet(viewsets.ModelViewSet):
 
 
 class TokenObtainPairSwaggerView(TokenObtainPairView):
+	serializer_class = TokenObtainPairWithTypeSerializer
+
 	@extend_schema(
 		summary='Obtain JWT pair',
 		description='Authenticate using email and password and receive access and refresh tokens.',
