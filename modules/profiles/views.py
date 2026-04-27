@@ -1,4 +1,7 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema, extend_schema_view
 
 from modules.profiles.models import HoSoCongTy, HoSoUngVien
@@ -115,3 +118,20 @@ class HoSoUngVienViewSet(viewsets.ModelViewSet):
 class HoSoCongTyViewSet(viewsets.ModelViewSet):
 	queryset = HoSoCongTy.objects.all()
 	serializer_class = HoSoCongTySerializer
+	permission_classes = [IsAuthenticated]
+
+	def get_queryset(self):
+		user = self.request.user
+		if user.is_authenticated and getattr(user, "vai_tro", None) == "cong_ty":
+			return HoSoCongTy.objects.filter(cong_ty=user)
+		return HoSoCongTy.objects.none()
+
+	def perform_create(self, serializer):
+		serializer.save(cong_ty=self.request.user)
+
+	@action(detail=False, methods=["get"], url_path="me")
+	def me(self, request):
+		profile = HoSoCongTy.objects.filter(cong_ty=request.user).first()
+		if not profile:
+			return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+		return Response(self.get_serializer(profile).data)
