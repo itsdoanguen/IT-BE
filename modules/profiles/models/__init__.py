@@ -40,7 +40,12 @@ class HoSoCongTy(models.Model):
 	ten_cong_ty = models.CharField(max_length=255)
 	linh_vuc = models.CharField(max_length=255, null=True, blank=True)
 	lich_su = models.TextField(null=True, blank=True)
-	lien_he = models.CharField(max_length=255, null=True, blank=True)
+	nam_thanh_lap = models.IntegerField(null=True, blank=True)
+	so_luong_nhan_vien = models.IntegerField(null=True, blank=True)
+	tru_so_chinh = models.CharField(max_length=255, null=True, blank=True)
+	gioi_thieu = models.TextField(null=True, blank=True)
+	cac_du_an = models.TextField(null=True, blank=True)
+	thong_tin_lien_he = models.TextField(null=True, blank=True)
 	dia_chi = models.TextField(null=True, blank=True)
 
 	class Meta:
