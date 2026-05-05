@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'drf_spectacular',
     'rest_framework_simplejwt',
@@ -47,6 +48,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -180,3 +182,6 @@ TEST_TOKEN_EMAIL = os.getenv("TEST_TOKEN_EMAIL", "sprint-test@example.com")
 TEST_TOKEN_ROLE = os.getenv("TEST_TOKEN_ROLE", "cong_ty")
 TEST_TOKEN_PASSWORD = os.getenv("TEST_TOKEN_PASSWORD", "test-token-password")
 TEST_TOKEN_SHARED_SECRET = os.getenv("TEST_TOKEN_SHARED_SECRET", "")
+
+# CORS settings
+CORS_ALLOW_ALL_ORIGINS = True
