@@ -42,7 +42,12 @@ class HoSoCongTySerializer(serializers.ModelSerializer):
             "ten_cong_ty",
             "linh_vuc",
             "lich_su",
-            "lien_he",
+            "nam_thanh_lap",
+            "so_luong_nhan_vien",
+            "tru_so_chinh",
+            "gioi_thieu",
+            "cac_du_an",
+            "thong_tin_lien_he",
             "dia_chi",
         ]
         read_only_fields = ["cong_ty"]
