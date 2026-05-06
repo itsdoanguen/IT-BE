@@ -15,7 +15,7 @@ from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from modules.accounts.models import NguoiDung
 from modules.profiles.models import HoSoCongTy, HoSoUngVien
 from modules.profiles.serializers import HoSoCongTySerializer, HoSoUngVienSerializer
-from modules.profiles.permissions import IsCandidateSelf, IsEmployerOrCandidateSelf
+from modules.profiles.permissions import IsCandidateSelf, IsEmployerOrCandidateSelf, IsEmployerSelf
 from modules.profiles.pdf_generator import generate_cv_pdf
 from modules.profiles.cv_templates import get_template_class
 
@@ -298,10 +298,15 @@ class HoSoCongTyViewSet(viewsets.ModelViewSet):
 	serializer_class = HoSoCongTySerializer
 
 	def get_queryset(self):
-		user = self.request.user
-		if user.is_superuser:
-			return HoSoCongTy.objects.all()
-		return HoSoCongTy.objects.filter(cong_ty=user)
+		# Cho phép tất cả mọi người xem danh sách và chi tiết công ty
+		return HoSoCongTy.objects.all()
+
+	def get_permissions(self):
+		if self.action in ["update", "partial_update", "destroy"]:
+			self.permission_classes = [IsAuthenticated, IsEmployerSelf]
+		else:
+			self.permission_classes = [IsAuthenticated]
+		return super().get_permissions()
 
 	def perform_create(self, serializer):
 		if self.request.user.vai_tro != NguoiDung.VaiTro.CONG_TY:

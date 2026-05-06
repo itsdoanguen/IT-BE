@@ -38,3 +38,24 @@ class IsEmployerOrCandidateSelf(BasePermission):
         
         # Admin xem được tất cả
         return request.user.is_superuser
+
+
+class IsEmployerSelf(BasePermission):
+    """
+    Cho phép công ty chỉnh sửa hồ sơ của chính mình.
+    """
+    message = "Bạn không có quyền chỉnh sửa hồ sơ công ty này."
+
+    def has_object_permission(self, request, view, obj):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.is_superuser:
+            return True
+
+        if getattr(user, "vai_tro", None) != NguoiDung.VaiTro.CONG_TY:
+            return False
+
+        # obj là HoSoCongTy instance
+        return obj.cong_ty_id == user.id
