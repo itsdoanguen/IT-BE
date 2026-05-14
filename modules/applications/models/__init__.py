@@ -7,6 +7,7 @@ class UngTuyen(models.Model):
 		CHAP_NHAN = "chap_nhan", "Chap nhan"
 		TU_CHOI = "tu_choi", "Tu choi"
 		HOAN_THANH = "hoan_thanh", "Hoan thanh"
+		HET_HIEU_LUC = "het_hieu_luc", "Het hieu luc"
 
 	ung_tuyen_id = models.AutoField(primary_key=True)
 	tin = models.ForeignKey(

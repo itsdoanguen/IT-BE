@@ -31,5 +31,9 @@ def apply_job_filters(queryset, query_params):
 		except InvalidOperation as exc:
 			raise ValidationError({"luong_min": "luong_min phai la so hop le."}) from exc
 		queryset = queryset.filter(luong_theo_gio__gte=minimum_salary)
+	
+	cong_ty_id = (query_params.get("cong_ty") or "").strip()
+	if cong_ty_id:
+		queryset = queryset.filter(cong_ty_id=cong_ty_id)
 
 	return queryset
