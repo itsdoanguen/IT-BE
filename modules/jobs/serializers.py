@@ -14,6 +14,8 @@ class TinTuyenDungSerializer(serializers.ModelSerializer):
     edit_action = serializers.SerializerMethodField()
     delete_action = serializers.SerializerMethodField()
     job_description = serializers.CharField(source="noi_dung", read_only=True)
+    has_applied = serializers.SerializerMethodField()
+    is_hired_elsewhere = serializers.SerializerMethodField()
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -33,6 +35,7 @@ class TinTuyenDungSerializer(serializers.ModelSerializer):
         data["badges"] = self._build_badges(trang_thai, dia_diem_lam_viec)
         data["openings"] = 1
         data["location"] = dia_diem_lam_viec
+        data["id"] = instance.tin_id
         data["raw"] = raw_data
 
         return data
@@ -88,6 +91,33 @@ class TinTuyenDungSerializer(serializers.ModelSerializer):
             "available": self._can_manage(instance),
         }
 
+    def get_has_applied(self, instance):
+        request = self.context.get("request")
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+            
+        from modules.accounts.models import NguoiDung
+        if getattr(request.user, 'vai_tro', None) != NguoiDung.VaiTro.UNG_VIEN:
+            return False
+            
+        from modules.applications.models import UngTuyen
+        return UngTuyen.objects.filter(tin=instance, ung_vien__ung_vien=request.user).exists()
+
+    def get_is_hired_elsewhere(self, instance):
+        request = self.context.get("request")
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+            
+        from modules.accounts.models import NguoiDung
+        if getattr(request.user, 'vai_tro', None) != NguoiDung.VaiTro.UNG_VIEN:
+            return False
+            
+        from modules.applications.models import UngTuyen
+        return UngTuyen.objects.filter(
+            ung_vien__ung_vien=request.user,
+            trang_thai__in=[UngTuyen.TrangThai.CHAP_NHAN, UngTuyen.TrangThai.HOAN_THANH]
+        ).exists()
+
     def _can_manage(self, instance):
         request = self.context.get("request")
         if not request or not request.user or not request.user.is_authenticated:
@@ -128,4 +158,11 @@ class TinTuyenDungSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TinTuyenDung
-        fields = "__all__"
+        fields = [
+            "tin_id", "cong_ty", "tieu_de", "noi_dung", "bat_dau_lam", "ket_thuc_lam", 
+            "luong_theo_gio", "dia_diem_lam_viec", "hinh_thuc_tuyen_dung", "yeu_cau", 
+            "quyen_loi", "trang_thai", "tao_luc", "has_applied", "is_hired_elsewhere",
+            "company_name", "posting_title", "job_title", "recruitment_type", 
+            "application_deadline", "requirements", "benefits", "edit_action", 
+            "delete_action", "job_description"
+        ]

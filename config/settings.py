@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'modules.reviews.apps.ReviewsConfig',
     'modules.notifications.apps.NotificationsConfig',
     'modules.candidate_matching.apps.CandidateMatchingConfig',
+    'modules.candidate_viewing.apps.CandidateViewingConfig',
 ]
 
 MIDDLEWARE = [

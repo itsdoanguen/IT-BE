@@ -38,6 +38,57 @@ class BaseCandidateSearchAPIView(APIView):
 
 	def get_queryset(self, params):
 		queryset = HoSoUngVien.objects.all()
+		
+		job_id_from_url = self.kwargs.get('job_id')
+		job_id_from_query = self.request.query_params.get('job_id')
+		user = self.request.user
+		from modules.accounts.models import NguoiDung
+		from modules.applications.models import UngTuyen
+		
+		# 1. Loại bỏ các ứng viên đã được công ty KHÁC chấp nhận hoặc tuyển dụng thành công
+		# Điều này đảm bảo khi một bên đã nhận thì bên khác không thấy nữa
+		hired_elsewhere_ids = UngTuyen.objects.filter(
+			trang_thai__in=[UngTuyen.TrangThai.CHAP_NHAN, UngTuyen.TrangThai.HOAN_THANH]
+		).exclude(
+			tin__cong_ty__cong_ty=user
+		).values_list('ung_vien_id', flat=True).distinct()
+		
+		queryset = queryset.exclude(pk__in=hired_elsewhere_ids)
+
+		# 2. Xử lý logic lọc theo đơn ứng tuyển cho Nhà tuyển dụng
+		if not job_id_from_url:
+			from modules.applications.models import UngTuyen
+			from django.db.models import Subquery, OuterRef
+			
+			# Xử lý trạng thái từ Tab (Frontend gửi 'new', 'accepted', 'rejected')
+			status_param = self.request.query_params.get('status', 'new')
+			target_statuses = []
+			if status_param == 'accepted':
+				target_statuses = [UngTuyen.TrangThai.CHAP_NHAN, UngTuyen.TrangThai.HOAN_THANH]
+			elif status_param == 'rejected':
+				target_statuses = [UngTuyen.TrangThai.TU_CHOI]
+			else:
+				target_statuses = [UngTuyen.TrangThai.CHO_DUYET]
+				
+			# Nếu có lọc theo job_id từ dropdown
+			if job_id_from_query:
+				app_filter = {
+					'tin__cong_ty__cong_ty': user,
+					'tin_id': job_id_from_query,
+					'trang_thai__in': target_statuses
+				}
+				applicant_ids = UngTuyen.objects.filter(**app_filter).values_list('ung_vien_id', flat=True).distinct()
+				queryset = queryset.filter(pk__in=applicant_ids)
+			else:
+				# Nếu xem tất cả jobs, lọc dựa trên trạng thái của đơn ứng tuyển MỚI NHẤT
+				latest_app_status = UngTuyen.objects.filter(
+					ung_vien=OuterRef('pk'),
+					tin__cong_ty__cong_ty=user
+				).order_by('-thoi_gian_ung_tuyen', '-ung_tuyen_id').values('trang_thai')[:1]
+				
+				queryset = queryset.annotate(latest_status=Subquery(latest_app_status))
+				queryset = queryset.filter(latest_status__in=target_statuses)
+
 		queryset = apply_candidate_filters(queryset, params)
 		return queryset
 
@@ -128,6 +179,12 @@ class CandidateDetailAPIView(APIView):
 	)
 	def get(self, request, candidate_id):
 		candidate = get_object_or_404(HoSoUngVien, pk=candidate_id)
+		
+		# Kiểm tra xem ứng viên đã được bên khác nhận chưa
+		from modules.applications.models import UngTuyen
+		if UngTuyen.objects.filter(ung_vien=candidate, trang_thai__in=[UngTuyen.TrangThai.CHAP_NHAN, UngTuyen.TrangThai.HOAN_THANH]).exclude(tin__cong_ty__cong_ty=request.user).exists():
+			return Response({"detail": "Ứng viên này đã được tuyển dụng bởi công ty khác và không còn hiển thị."}, status=403)
+
 		reviews = list(
 			DanhGia.objects.filter(nguoi_nhan_danh_gia=candidate.ung_vien)
 			.order_by("-tao_luc")
@@ -159,7 +216,18 @@ class CandidateEvaluationAPIView(APIView):
 	def get(self, request, candidate_id):
 		candidate = get_object_or_404(HoSoUngVien, pk=candidate_id)
 		from modules.applications.models import UngTuyen
-		application = UngTuyen.objects.filter(ung_vien=candidate).order_by("-thoi_gian_ung_tuyen").first()
+		
+		# Kiểm tra xem ứng viên đã được bên khác nhận chưa
+		if UngTuyen.objects.filter(ung_vien=candidate, trang_thai__in=[UngTuyen.TrangThai.CHAP_NHAN, UngTuyen.TrangThai.HOAN_THANH]).exclude(tin__cong_ty__cong_ty=request.user).exists():
+			return Response({"detail": "Ứng viên này đã được tuyển dụng bởi công ty khác."}, status=403)
+			
+		job_id = request.query_params.get('job_id')
+		
+		apps = UngTuyen.objects.filter(ung_vien=candidate, tin__cong_ty__cong_ty=request.user).order_by("-thoi_gian_ung_tuyen", "-ung_tuyen_id")
+		if job_id:
+			apps = apps.filter(tin_id=job_id)
+			
+		application = apps.first()
 		
 		review = None
 		if application:
@@ -181,10 +249,21 @@ class CandidateEvaluationAPIView(APIView):
 	def post(self, request, candidate_id):
 		candidate = get_object_or_404(HoSoUngVien, pk=candidate_id)
 		from modules.applications.models import UngTuyen
-		application = UngTuyen.objects.filter(ung_vien=candidate).order_by("-thoi_gian_ung_tuyen").first()
+		
+		# Kiểm tra xem ứng viên đã được bên khác nhận chưa
+		if UngTuyen.objects.filter(ung_vien=candidate, trang_thai__in=[UngTuyen.TrangThai.CHAP_NHAN, UngTuyen.TrangThai.HOAN_THANH]).exclude(tin__cong_ty__cong_ty=request.user).exists():
+			return Response({"detail": "Ứng viên này đã được tuyển dụng bởi công ty khác."}, status=403)
+			
+		job_id = request.query_params.get('job_id')
+		
+		apps = UngTuyen.objects.filter(ung_vien=candidate, tin__cong_ty__cong_ty=request.user).order_by("-thoi_gian_ung_tuyen", "-ung_tuyen_id")
+		if job_id:
+			apps = apps.filter(tin_id=job_id)
+			
+		application = apps.first()
 		
 		if not application:
-			return Response({"detail": "Ứng viên chưa có đơn ứng tuyển nào."}, status=400)
+			return Response({"detail": "Ứng viên chưa có đơn ứng tuyển nào phù hợp."}, status=400)
 			
 		status = request.data.get("status")
 		rating = request.data.get("rating")
@@ -193,6 +272,13 @@ class CandidateEvaluationAPIView(APIView):
 		if status:
 			application.trang_thai = status
 			application.save()
+			
+			# Nếu ứng viên được chấp nhận hoặc trúng tuyển, tự động hủy các đơn chờ duyệt khác
+			if status in [UngTuyen.TrangThai.CHAP_NHAN, UngTuyen.TrangThai.HOAN_THANH]:
+				UngTuyen.objects.filter(
+					ung_vien=candidate,
+					trang_thai=UngTuyen.TrangThai.CHO_DUYET
+				).exclude(pk=application.pk).update(trang_thai=UngTuyen.TrangThai.HET_HIEU_LUC)
 			
 		if rating is not None:
 			DanhGia.objects.update_or_create(
